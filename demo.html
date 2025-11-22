@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画中有字 - 趣味学汉字</title>
+    <style>
+        /* 1. 整体风格设置 */
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #FDF6E3; /* 柔和的米色背景 */
+            font-family: "Rounded Mplus 1c", "YouYuan", sans-serif; /* 圆体字更亲切 */
+            overflow: hidden;
+        }
+
+        /* 卡片容器 */
+        .card {
+            width: 460px;
+            height: 620px;
+            background: white;
+            border-radius: 36px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.12);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s;
+            padding: 24px;
+        }
+
+        .card:active {
+            transform: scale(0.98);
+        }
+
+        /* 2. SVG 容器 */
+        .visual-area {
+            width: 360px;
+            height: 360px;
+            position: relative;
+        }
+
+        /* 汉字显示层 (初始隐藏，变形后显示) */
+        .hanzi-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 240px;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
+            z-index: 1;
+            color: #333;
+            pointer-events: none;
+        }
+
+        /* 图像层 SVG */
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        /* 山峰的路径样式 */
+        .mountain-path {
+            fill: #8BC34A; /* 草绿色 */
+            stroke: #8BC34A;
+            stroke-width: 8;
+            stroke-linejoin: round;
+            transition: all 1.5s ease-in-out;
+        }
+
+        /* 交互状态：当卡片被添加 .learned 类时触发变形 */
+        .card.learned .mountain-path {
+            fill: transparent; /* 颜色消失 */
+            stroke: #333;      /* 变成笔画颜色 */
+            stroke-width: 18;  /* 笔画变粗 */
+            opacity: 0.1; /* 最终让位给标准汉字，只留淡淡的痕迹作为参照 */
+        }
+
+        .card.learned .hanzi-layer {
+            opacity: 1;
+        }
+
+        /* 3. 底部文字区 */
+        .text-area {
+            margin-top: 28px;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease 1s; /* 延迟显示 */
+        }
+
+        .card.learned .text-area {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .pinyin {
+            font-size: 30px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        
+        .hint {
+            position: absolute;
+            bottom: 24px;
+            font-size: 14px;
+            color: #aaa;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+        .mode-btn { border: none; background: #FFECB3; color: #7A4F01; padding: 8px 12px; border-radius: 14px; font-size: 14px; cursor: pointer; }
+        .mode-btn.active { background: #FFD54F; }
+        .menu-overlay { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); padding: 10px 14px; display: flex; align-items: center; gap: 10px; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+        .menu-overlay.show { opacity: 1; pointer-events: auto; }
+        .mode-indicator { position: fixed; top: 12px; right: 12px; background: #FFECB3; color: #7A4F01; padding: 6px 10px; border-radius: 14px; box-shadow: 0 6px 16px rgba(0,0,0,0.08); font-size: 12px; z-index: 95; }
+        .secret-overlay { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); padding: 14px; display: grid; grid-template-columns: 1fr; gap: 10px; z-index: 110; opacity: 0; pointer-events: none; transition: opacity .25s ease; width: 520px; max-width: calc(100% - 32px); }
+        .secret-overlay.show { opacity: 1; pointer-events: auto; }
+        .secret-overlay input { width: 100%; border: 1px solid #eee; border-radius: 12px; padding: 10px; font-size: 14px; background: #FAFAFA; }
+        .secret-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: #FFF3E0; color: #7A4F01; padding: 8px 12px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); z-index: 150; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+        .toast.show { opacity: 1; pointer-events: auto; }
+        .done-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; z-index: 160; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+        .done-overlay.show { opacity: 1; pointer-events: auto; }
+        .done-card { background: #fff; border-radius: 24px; box-shadow: 0 18px 40px rgba(0,0,0,0.12); padding: 18px 22px; min-width: 360px; max-width: 84vw; text-align: center; }
+        .done-title { font-size: 20px; color: #2E7D32; margin-bottom: 6px; }
+        .done-desc { font-size: 14px; color: #666; }
+        .panel { display: none; width: 680px; background: #fff; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); padding: 16px; gap: 10px; }
+        .panel.show { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        .panel input, .panel textarea { width: 100%; border: 1px solid #eee; border-radius: 12px; padding: 10px; font-size: 14px; background: #FAFAFA; }
+        .panel .action { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; }
+        .primary { border: none; background: #81C784; color: #fff; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="app">
+        <div id="modeIndicator" class="mode-indicator">默认学习</div>
+
+        <div class="panel" id="userPanel">
+            <div>
+                <div style="font-size:14px;color:#666;margin-bottom:6px;">加载本地文件（最多10个汉字）</div>
+                <input id="fileInput" type="file" accept=".txt,.json" />
+            </div>
+            <div>
+                <div style="font-size:14px;color:#666;margin-bottom:6px;">或手动输入</div>
+                <textarea id="customChars" rows="3" placeholder="例如：山日月木火水人……"></textarea>
+            </div>
+            <div class="action">
+                <button class="primary" id="loadFileBtn">加载并生成</button>
+                <button class="primary" id="generateBtn">生成动画</button>
+            </div>
+        </div>
+
+        <div class="card" id="card">
+            <div class="visual-area">
+                <div class="hanzi-layer" id="hanziLayer"></div>
+                <svg id="svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+            <div class="text-area">
+                <div class="pinyin" id="pinyin"></div>
+                <div style="font-size: 14px; color:#666;" id="meaning"></div>
+            </div>
+            <div class="hint" id="hint">点击图片变变变</div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT = [
+            {char:'山', pinyin:'shān', meaning:'大山 / Mountain', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 20 150 Q 50 150, 50 100 L 50 80 Q 50 60, 70 100 L 80 120 Q 90 140, 100 60 L 100 30 Q 100 10, 120 80 L 130 120 Q 140 140, 150 80 L 150 100 Q 150 150, 180 150 Z`}}]},
+            {char:'日', pinyin:'rì', meaning:'太阳 / Sun', svg:[{tag:'circle', class:'mountain-path', attrs:{cx:100, cy:100, r:45}}]},
+            {char:'月', pinyin:'yuè', meaning:'月亮 / Moon', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 120 60 A 50 50 0 1 0 120 140 A 30 50 0 1 1 120 60 Z`}}]},
+            {char:'木', pinyin:'mù', meaning:'树木 / Tree', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 100 40 L 70 90 L 130 90 Z M 95 90 L 95 150 L 105 150 L 105 90 Z`}}]},
+            {char:'火', pinyin:'huǒ', meaning:'火焰 / Fire', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 100 150 Q 70 130 85 110 Q 95 90 80 80 Q 110 85 115 60 Q 130 85 120 100 Q 140 115 120 140 Z`}}]},
+            {char:'水', pinyin:'shuǐ', meaning:'流水 / Water', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 30 120 Q 50 130 70 120 Q 90 110 110 120 Q 130 130 150 120`}}]},
+            {char:'人', pinyin:'rén', meaning:'人形 / Person', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 100 50 L 80 90 M 100 50 L 120 90 M 80 90 L 120 150`}}]},
+            {char:'口', pinyin:'kǒu', meaning:'嘴巴 / Mouth', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 70 L 140 70 L 140 130 L 60 130 Z`}}]},
+            {char:'目', pinyin:'mù', meaning:'眼睛 / Eye', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 70 L 140 70 L 140 130 L 60 130 Z M 80 90 L 120 90 L 120 110 L 80 110 Z`}}]},
+            {char:'鱼', pinyin:'yú', meaning:'小鱼 / Fish', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 100 Q 90 70 130 100 Q 90 130 60 100 Z M 55 100 L 40 85 M 55 100 L 40 115 M 90 95 A 5 5 0 1 0 91 95`}}]},
+            {char:'鸟', pinyin:'niǎo', meaning:'小鸟 / Bird', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 110 Q 80 90 100 110 Q 120 90 140 110 M 90 95 L 105 80`}}]},
+            {char:'田', pinyin:'tián', meaning:'田地 / Field', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 60 L 140 60 L 140 140 L 60 140 Z M 100 60 L 100 140 M 60 100 L 140 100`}}]},
+            {char:'门', pinyin:'mén', meaning:'门框 / Door', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 50 L 140 50 L 140 150 L 60 150 Z M 90 150 L 90 90`}}]},
+            {char:'刀', pinyin:'dāo', meaning:'小刀 / Knife', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 70 70 L 130 60 L 120 120 L 70 120 Z`}}]},
+            {char:'雨', pinyin:'yǔ', meaning:'雨滴 / Rain', svg:[{tag:'path', class:'mountain-path', attrs:{d:`M 60 60 L 140 60 L 140 100 L 60 100 Z M 70 120 L 70 150 M 90 120 L 90 150 M 110 120 L 110 150 M 130 120 L 130 150`}}]}
+        ];
+
+        const state = { mode:'default', index:0, data: DEFAULT, learned: new Set() };
+        const ARK_CFG = { url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions', model: 'doubao-seed-1-6-vision-250815' };
+
+        const el = {
+            app: document.querySelector('.app'),
+            card: document.getElementById('card'),
+            hanzi: document.getElementById('hanziLayer'),
+            svg: document.getElementById('svg'),
+            pinyin: document.getElementById('pinyin'),
+            meaning: document.getElementById('meaning'),
+            panel: document.getElementById('userPanel'),
+            customChars: document.getElementById('customChars'),
+            fileInput: document.getElementById('fileInput'),
+            loadFileBtn: document.getElementById('loadFileBtn'),
+            generate: document.getElementById('generateBtn'),
+            hint: document.getElementById('hint'),
+            modeIndicator: document.getElementById('modeIndicator')
+        };
+
+        function updateModeIndicator() {
+            el.modeIndicator.textContent = state.mode === 'default' ? '默认学习' : '自定义学习';
+        }
+
+        function render() {
+            const item = state.data[state.index];
+            resetLearn();
+            el.hanzi.textContent = item.char;
+            el.pinyin.textContent = item.pinyin || '';
+            el.meaning.textContent = item.meaning || '';
+            renderSVG(item.svg);
+        }
+
+        function renderSVG(desc) {
+            while (el.svg.firstChild) el.svg.removeChild(el.svg.firstChild);
+            desc.forEach(d => {
+                const node = document.createElementNS('http://www.w3.org/2000/svg', d.tag || 'path');
+                if (d.class) node.setAttribute('class', d.class);
+                for (const k in d.attrs) node.setAttribute(k, d.attrs[k]);
+                el.svg.appendChild(node);
+            });
+        }
+
+        function setMode(m) {
+            state.mode = m;
+            el.panel.classList.toggle('show', m==='user');
+            if (m==='default') {
+                state.data = DEFAULT;
+                state.index = 0;
+                state.learned.clear();
+                render();
+            }
+            updateModeIndicator();
+        }
+
+        async function buildCustom(chars) {
+            const list = [...chars].filter(c => /[\u4e00-\u9fff]/.test(c));
+            if (list.length === 0) { showToast('请输入要生成的汉字'); return; }
+            showToast('正在生成动画 0/' + list.length);
+            const out = [];
+            let ok = 0;
+            for (const c of list) {
+                const svg = await generateSVG(c).catch(() => fallbackSVG(c));
+                out.push({char:c, pinyin:'', meaning:'', svg});
+                ok++;
+                updateToast('正在生成动画 ' + ok + '/' + list.length);
+            }
+            hideToast();
+            state.data = out;
+            state.index = 0;
+            state.learned.clear();
+            render();
+            showDone('生成完成', '已生成 ' + out.length + ' 个汉字动画');
+        }
+
+        function resetLearn() {
+            el.card.classList.remove('learned');
+            el.hanzi.style.opacity = '0';
+        }
+
+        async function generateSVG(c) {
+            return generateSVGViaVolcano(c, ARK_CFG.url);
+        }
+
+        async function generateSVGViaVolcano(c, url) {
+            const headers = { 'Content-Type':'application/json' };
+            const key = getArkKey();
+            if (!key) { warnNoKey(); return fallbackSVG(c); }
+            headers['Authorization'] = 'Bearer ' + key;
+            const model = ARK_CFG.model;
+            const prompt = `为汉字“${c}”生成一个200x200视口的简洁象形SVG。只输出JSON，格式为{ "paths": [ { "tag": "path", "attrs": { "d": "..." } } ] }。线条尽量少，适合儿童，使用绝对坐标，避免复杂滤镜与外链。`;
+            const body = { model, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }] };
+            let res, json;
+            try {
+                res = await fetch(url, { method:'POST', headers, body: JSON.stringify(body) });
+                json = await res.json();
+            } catch (e) {
+                showToast('请求失败');
+                return fallbackSVG(c);
+            }
+            if (!res.ok) {
+                const msg = (json && json.error && json.error.message) ? json.error.message : ('HTTP ' + res.status);
+                showToast('接口错误：' + msg);
+                return fallbackSVG(c);
+            }
+            let content = '';
+            if (json && json.choices && json.choices[0]) {
+                const msg = json.choices[0].message;
+                if (typeof msg?.content === 'string') content = msg.content;
+                else if (Array.isArray(msg?.content)) {
+                    const t = msg.content.find(x => x.type === 'text');
+                    content = t ? t.text : '';
+                }
+            }
+            if (!content && typeof json.output_text === 'string') content = json.output_text;
+            if (!content) return fallbackSVG(c);
+            const start = content.indexOf('{');
+            const end = content.lastIndexOf('}');
+            if (start === -1 || end === -1) return fallbackSVG(c);
+            let obj = null;
+            try { obj = JSON.parse(content.slice(start, end + 1)); } catch(e) { return fallbackSVG(c); }
+            const paths = Array.isArray(obj.paths) ? obj.paths : [];
+            if (paths.length === 0) return fallbackSVG(c);
+            return paths.map(p => ({ tag: p.tag||'path', class:'mountain-path', attrs: p.attrs||p }));
+        }
+
+        function getArkKey() {
+            if (window.__VE_ARK_KEY) return window.__VE_ARK_KEY;
+            return localStorage.getItem('VE_ARK_API_KEY') || '';
+        }
+
+        function warnNoKey() {
+            const tip = document.createElement('div');
+            tip.style.position = 'fixed';
+            tip.style.top = '24px';
+            tip.style.left = '50%';
+            tip.style.transform = 'translateX(-50%)';
+            tip.style.background = '#FFF3E0';
+            tip.style.color = '#7A4F01';
+            tip.style.padding = '8px 12px';
+            tip.style.borderRadius = '14px';
+            tip.style.boxShadow = '0 8px 20px rgba(0,0,0,0.08)';
+            tip.style.zIndex = '200';
+            tip.textContent = '缺少 API Key，使用回退图形';
+            document.body.appendChild(tip);
+            setTimeout(() => { tip.remove(); }, 2500);
+        }
+
+        function fallbackSVG(c) {
+            if (c==='日') return [{tag:'circle', class:'mountain-path', attrs:{cx:100, cy:100, r:45}}];
+            if (c==='月') return [{tag:'path', class:'mountain-path', attrs:{d:`M 120 60 A 50 50 0 1 0 120 140 A 30 50 0 1 1 120 60 Z`}}];
+            return [{tag:'path', class:'mountain-path', attrs:{d:`M 50 150 Q 100 50 150 150 Z`}}];
+        }
+
+        el.card.addEventListener('click', () => {
+            el.hanzi.style.opacity = '';
+            el.card.classList.add('learned');
+            state.learned.add(state.index);
+            if (state.learned.size === state.data.length) showDone('学习完成', '恭喜，已完成本套汉字学习');
+        });
+        let menuEl = null; let menuTimer = null;
+        function ensureMenu() {
+            if (menuEl) return;
+            menuEl = document.createElement('div');
+            menuEl.className = 'menu-overlay';
+            const btnDefault = document.createElement('button');
+            btnDefault.className = 'mode-btn';
+            btnDefault.textContent = '默认学习';
+            const btnUser = document.createElement('button');
+            btnUser.className = 'mode-btn';
+            btnUser.textContent = '自定义学习';
+            btnDefault.addEventListener('click', () => { setMode('default'); hideMenu(); });
+            btnUser.addEventListener('click', () => { setMode('user'); hideMenu(); });
+            menuEl.appendChild(btnDefault);
+            menuEl.appendChild(btnUser);
+            document.body.appendChild(menuEl);
+        }
+
+        function showMenu() {
+            ensureMenu();
+            menuEl.classList.add('show');
+            clearTimeout(menuTimer);
+            menuTimer = setTimeout(() => { hideMenu(); }, 4000);
+        }
+
+        function hideMenu() {
+            if (!menuEl) return;
+            menuEl.classList.remove('show');
+        }
+
+        el.app.addEventListener('dblclick', (e) => {
+            if (e.target.closest('#card') || e.target.closest('#userPanel')) return;
+            showMenu();
+        });
+
+        el.app.addEventListener('click', (e) => {
+            if (el.panel.classList.contains('show') && !e.target.closest('#userPanel')) {
+                el.panel.classList.remove('show');
+            }
+            if (e.detail > 1) return;
+            if (e.target.closest('#card') || e.target.closest('#userPanel') || (menuEl && menuEl.contains(e.target))) return;
+            const x = e.clientX;
+            if (x < window.innerWidth / 2) {
+                state.index = (state.index - 1 + state.data.length) % state.data.length;
+            } else {
+                state.index = (state.index + 1) % state.data.length;
+            }
+            render();
+        });
+        el.generate.addEventListener('click', () => buildCustom(el.customChars.value));
+        el.loadFileBtn.addEventListener('click', handleLoadFile);
+
+        async function handleLoadFile() {
+            const f = el.fileInput.files && el.fileInput.files[0];
+            if (!f) { showToast('请选择文件'); setTimeout(hideToast, 1600); return; }
+            let txt = '';
+            try { txt = await f.text(); } catch(e) { showToast('读取文件失败'); setTimeout(hideToast, 1600); return; }
+            let chars = '';
+            try {
+                const obj = JSON.parse(txt);
+                if (Array.isArray(obj)) chars = obj.filter(x => /[\u4e00-\u9fff]/.test(x)).slice(0,10).join('');
+                else if (Array.isArray(obj.chars)) chars = obj.chars.filter(x => /[\u4e00-\u9fff]/.test(x)).slice(0,10).join('');
+                else chars = extractChars(txt);
+            } catch(e) {
+                chars = extractChars(txt);
+            }
+            if (!chars) { showToast('未识别到汉字'); setTimeout(hideToast, 1600); return; }
+            await buildCustom(chars);
+        }
+
+        function extractChars(txt) {
+            const arr = txt.match(/[\u4e00-\u9fff]/g) || [];
+            return arr.slice(0,10).join('');
+        }
+
+        let secretEl = null; let secretTimer = null; let pressTimer = null;
+        function ensureSecret() {
+            if (secretEl) return;
+            secretEl = document.createElement('div');
+            secretEl.className = 'secret-overlay';
+            const title = document.createElement('div');
+            title.style.fontSize = '14px';
+            title.style.color = '#666';
+            title.textContent = '设置火山引擎 API Key（仅本地保存）';
+            const input = document.createElement('input');
+            input.placeholder = '例如：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx';
+            const current = getArkKey();
+            if (current) input.value = current;
+            const modelBox = document.createElement('input');
+            modelBox.placeholder = '模型（可选），当前：' + ARK_CFG.model;
+            const actions = document.createElement('div');
+            actions.className = 'secret-actions';
+            const btnSave = document.createElement('button');
+            btnSave.className = 'primary';
+            btnSave.textContent = '保存';
+            const btnClose = document.createElement('button');
+            btnClose.className = 'mode-btn';
+            btnClose.textContent = '关闭';
+            btnSave.addEventListener('click', () => {
+                const key = input.value.trim();
+                if (key) {
+                    localStorage.setItem('VE_ARK_API_KEY', key);
+                    window.__VE_ARK_KEY = key;
+                }
+                const m = modelBox.value.trim();
+                if (m) ARK_CFG.model = m;
+                hideSecret();
+            });
+            btnClose.addEventListener('click', hideSecret);
+            actions.appendChild(btnClose);
+            actions.appendChild(btnSave);
+            secretEl.appendChild(title);
+            secretEl.appendChild(input);
+            secretEl.appendChild(modelBox);
+            secretEl.appendChild(actions);
+            document.body.appendChild(secretEl);
+        }
+
+        function showSecret() {
+            ensureSecret();
+            secretEl.classList.add('show');
+            clearTimeout(secretTimer);
+            secretTimer = setTimeout(() => { hideSecret(); }, 6000);
+        }
+
+        function hideSecret() {
+            if (!secretEl) return;
+            secretEl.classList.remove('show');
+        }
+
+        function startSecretPress() {
+            clearTimeout(pressTimer);
+            pressTimer = setTimeout(showSecret, 900);
+        }
+        function cancelSecretPress() {
+            clearTimeout(pressTimer);
+        }
+        el.hint.addEventListener('mousedown', startSecretPress);
+        el.hint.addEventListener('mouseup', cancelSecretPress);
+        el.hint.addEventListener('mouseleave', cancelSecretPress);
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'k') showSecret();
+        });
+
+        let toastEl = null;
+        function ensureToast() {
+            if (toastEl) return;
+            toastEl = document.createElement('div');
+            toastEl.className = 'toast';
+            document.body.appendChild(toastEl);
+        }
+        function showToast(text) {
+            ensureToast();
+            toastEl.textContent = text;
+            toastEl.classList.add('show');
+        }
+        function updateToast(text) {
+            if (!toastEl) return;
+            toastEl.textContent = text;
+        }
+        function hideToast() {
+            if (!toastEl) return;
+            toastEl.classList.remove('show');
+        }
+
+        let doneEl = null;
+        function ensureDone() {
+            if (doneEl) return;
+            doneEl = document.createElement('div');
+            doneEl.className = 'done-overlay';
+            const card = document.createElement('div');
+            card.className = 'done-card';
+            const title = document.createElement('div');
+            title.className = 'done-title';
+            const desc = document.createElement('div');
+            desc.className = 'done-desc';
+            card.appendChild(title);
+            card.appendChild(desc);
+            doneEl.appendChild(card);
+            doneEl.addEventListener('click', () => hideDone());
+            document.body.appendChild(doneEl);
+        }
+        function showDone(title, desc) {
+            ensureDone();
+            const card = doneEl.querySelector('.done-card');
+            card.querySelector('.done-title').textContent = title;
+            card.querySelector('.done-desc').textContent = desc;
+            doneEl.classList.add('show');
+            setTimeout(() => hideDone(), 2200);
+        }
+        function hideDone() {
+            if (!doneEl) return;
+            doneEl.classList.remove('show');
+        }
+
+        updateModeIndicator();
+        render();
+    </script>
+
+    </body>
+    </html>
